@@ -11,80 +11,49 @@ GPIO.setup(photo,GPIO.IN)
 
 while True:
     GPIO.output(led, not GPIO.input(photo))   
-import smbus
+import numpy as np
+import time
 
 
-class MCP4725:
-    def __init__(self, dynamic_range, address=0x61, verbose=True):
-        self.bus = smbus.SMBus(1)
+def get_sin_wave_amplitude(freq, time):
+    return (np.sin(2 * np.pi * freq * time) + 1) / 2
 
-        self.address = address
-        self.wm = 0x00
-        self.pds = 0x00
 
-        self.verbose = verbose
-        self.dynamic_range = dynamic_range
+def wait_for_sampling_period(sampling_frequency):
+    time.sleep(1 / sampling_frequency)
+import r2r_dac as r2r
+import signal_generator as sg
+import time
 
-    def deinit(self):
-        self.bus.close()
 
-    def set_number(self, number):
-        if not isinstance(number, int):
-            print("На вход ЦАП можно подавать только целые числа")
-            return
+amplitude = 3.2
+signal_frequency = 10
+sampling_frequency = 1000
 
-        if not (0 <= number <= 4095):
-            print("Число выходит за разрядность MCP4725 (12 бит)")
-            return
 
-        first_byte = self.wm | self.pds | (number >> 8)
-        second_byte = number & 0xFF
+try:
+    dac = r2r.R2R_DAC(
+        [16, 20, 21, 25, 26, 17, 27, 22],
+        3.183,
+        True
+    )
 
-        self.bus.write_byte_data(
-            self.address,
-            first_byte,
-            second_byte
+    start_time = time.time()
+
+    while True:
+        current_time = time.time() - start_time
+
+        signal = sg.get_sin_wave_amplitude(
+            signal_frequency,
+            current_time
         )
 
-        if self.verbose:
-            print(
-                f"Число: {number}, отправленные по I2C данные: "
-                f"[0x{(self.address << 1):02X}, "
-                f"0x{first_byte:02X}, "
-                f"0x{second_byte:02X}]\n"
-            )
+        voltage = signal * amplitude
 
-    def set_voltage(self, voltage):
-        if not (0.0 <= voltage <= self.dynamic_range):
-            print(
-                f"Напряжение должно быть от 0 до "
-                f"{self.dynamic_range:.2f} В"
-            )
-            return
+        dac.set_voltage(voltage)
 
-        number = round(
-            voltage / self.dynamic_range * 4095
-        )
+        sg.wait_for_sampling_period(sampling_frequency)
 
-        self.set_number(number)
-
-        if self.verbose:
-            print(f"Напряжение: {voltage:.2f} В")
-
-
-if __name__ == "__main__":
-    try:
-        dac = MCP4725(5.0, 0x61, True)
-
-        while True:
-            try:
-                voltage = float(
-                    input("Введите напряжение в Вольтах: ")
-                )
-                dac.set_voltage(voltage)
-
-            except ValueError:
-                print("Вы ввели не число. Попробуйте ещё раз\n")
-
-    finally:
-        dac.deinit()
+finally:
+    dac.deinit()
+    
