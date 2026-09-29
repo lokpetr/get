@@ -11,50 +11,76 @@ GPIO.setup(photo,GPIO.IN)
 
 while True:
     GPIO.output(led, not GPIO.input(photo))   
-import RPi.GPIO as GPIO
+import smbus
 
 
-class PWM_DAC:
-    def __init__(self, gpio_pin, pwm_frequency, dynamic_range, verbose=False):
-        self.gpio_pin = gpio_pin
-        self.pwm_frequency = pwm_frequency
-        self.dynamic_range = dynamic_range
+class MCP4725:
+    def __init__(self, dynamic_range, address=0x61, verbose=True):
+        self.bus = smbus.SMBus(1)
+
+        self.address = address
+        self.wm = 0x00
+        self.pds = 0x00
+
         self.verbose = verbose
-
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_pin, GPIO.OUT)
-
-        self.pwm = GPIO.PWM(self.gpio_pin, self.pwm_frequency)
-        self.pwm.start(0)
+        self.dynamic_range = dynamic_range
 
     def deinit(self):
-        self.pwm.stop()
-        GPIO.cleanup()
+        self.bus.close()
+
+    def set_number(self, number):
+        if not isinstance(number, int):
+            print("На вход ЦАП можно подавать только целые числа")
+            return
+
+        if not (0 <= number <= 4095):
+            print("Число выходит за разрядность MCP4725 (12 бит)")
+            return
+
+        first_byte = self.wm | self.pds | (number >> 8)
+        second_byte = number & 0xFF
+
+        self.bus.write_byte_data(
+            self.address,
+            first_byte,
+            second_byte
+        )
+
+        if self.verbose:
+            print(
+                f"Число: {number}, отправленные по I2C данные: "
+                f"[0x{(self.address << 1):02X}, "
+                f"0x{first_byte:02X}, "
+                f"0x{second_byte:02X}]\n"
+            )
 
     def set_voltage(self, voltage):
         if not (0.0 <= voltage <= self.dynamic_range):
             print(
                 f"Напряжение должно быть от 0 до "
-                f"{self.dynamic_range:.3f} В"
+                f"{self.dynamic_range:.2f} В"
             )
             return
 
-        duty_cycle = voltage / self.dynamic_range * 100
+        number = round(
+            voltage / self.dynamic_range * 4095
+        )
 
-        self.pwm.ChangeDutyCycle(duty_cycle)
+        self.set_number(number)
 
         if self.verbose:
-            print(f"Напряжение: {voltage:.3f} В")
-            print(f"Скважность PWM: {duty_cycle:.2f}%")
+            print(f"Напряжение: {voltage:.2f} В")
 
 
 if __name__ == "__main__":
     try:
-        dac = PWM_DAC(12, 500, 3.290, True)
+        dac = MCP4725(5.0, 0x61, True)
 
         while True:
             try:
-                voltage = float(input("Введите напряжение в Вольтах: "))
+                voltage = float(
+                    input("Введите напряжение в Вольтах: ")
+                )
                 dac.set_voltage(voltage)
 
             except ValueError:
