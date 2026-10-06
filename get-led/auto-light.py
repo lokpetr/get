@@ -361,3 +361,7 @@ if __name__ == "__main__":
 
         finally:
             mcp.deinit()
+git add .
+git commit -m "Add project"
+git pull origin main --allow-unrelated-histories
+git push -u origin main
