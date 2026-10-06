@@ -1,39 +1,32 @@
 import RPi.GPIO as GPIO
 
-
 class PWM_DAC:
-    def __init__(self, gpio_pin, pwm_frequency, dynamic_range, verbose=False):
-        self.gpio_pin = gpio_pin
-        self.pwm_frequency = pwm_frequency
+    def __init__(self, pin, pwn_frequency, dynamic_range, verbose = False):
+        self.pin = pin
+        self.pwn_frequency = pwn_frequency
         self.dynamic_range = dynamic_range
         self.verbose = verbose
-
+        
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_pin, GPIO.OUT)
+        GPIO.setup(self.pin, GPIO.OUT)
 
-        self.pwm = GPIO.PWM(self.gpio_pin, self.pwm_frequency)
-        self.pwm.start(0)
+        global pwm
+        pwm = GPIO.PWM(self.pin, self.pwn_frequency)
 
     def deinit(self):
-        self.pwm.stop()
+        GPIO.output(self.pin, 0)
         GPIO.cleanup()
+        pwm.stop()
 
     def set_voltage(self, voltage):
         if not (0.0 <= voltage <= self.dynamic_range):
-            print(
-                f"Напряжение должно быть от 0 до "
-                f"{self.dynamic_range:.3f} В"
-            )
-            return
+            print(f"Напряжение выходит за динамический диапозон ЦАП (0.00 - {self.dynamic_range:.2f} В)")
+        else:
+            k = voltage/self.dynamic_range * 100
+            pwm.start(k)
+            #print(f"Стартовал ШИМ со скважностью {k} на пине {self.pin}  с частотой {self.pwn_frequency}")
 
-        duty_cycle = voltage / self.dynamic_range * 100
-
-        self.pwm.ChangeDutyCycle(duty_cycle)
-
-        if self.verbose:
-            print(f"Напряжение: {voltage:.3f} В")
-            print(f"Скважность PWM: {duty_cycle:.2f}%")
-
+        return None
 
 if __name__ == "__main__":
     try:

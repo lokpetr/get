@@ -1,16 +1,16 @@
-import pwm_dac as pwm
+import mcp4725_driver as mcp4725
 import signal_generator as sg
 import time
 
-amplitude = 1.6
-pwm_frequency = 500
+amplitude = 1.3
+
 signal_frequency = 10
 sampling_frequency = 1000
-pin = 12
+pins = [16, 20, 21, 25, 26, 17, 27, 22]
 dynamic_range = 3.3
 
 try:
-    dac = pwm.PWM_DAC(pin, pwm_frequency, dynamic_range)
+    dac = mcp4725.MCP4725(dynamic_range)
 
     while True:
             try:

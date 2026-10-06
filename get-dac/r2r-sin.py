@@ -1,54 +1,23 @@
-import RPi.GPIO as GPIO
+import r2r_dac as r2r
 import signal_generator as sg
 import time
 
-
-class R2R_DAC:
-    def __init__(self, gpio_bits, dynamic_range):
-        self.gpio_bits = gpio_bits
-        self.dynamic_range = dynamic_range
-
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_bits, GPIO.OUT, initial=0)
-
-    def set_voltage(self, voltage):
-        number = int(voltage / self.dynamic_range * 255)
-
-        for i in range(8):
-            bit = (number >> i) & 1
-            GPIO.output(self.gpio_bits[7-i], bit)
-
-    def deinit(self):
-        GPIO.output(self.gpio_bits, 0)
-        GPIO.cleanup()
-
-
-amplitude = 3.2
+amplitude = 1.9
 signal_frequency = 10
-sampling_frequency = 1000
-
-
+sampling_frequency = 10000
+dynamic_range = 3.3
+pins = [16, 20, 21, 25, 26, 17, 27, 22]
 try:
-    dac = R2R_DAC(
-        [16, 20, 21, 25, 26, 17, 27, 22],
-        3.183
-    )
-
-    start_time = time.time()
+    dac = r2r.R2R_DAC(pins, dynamic_range)
 
     while True:
-        current_time = time.time() - start_time
+            try:
+                voltage = sg.get_sin_wave_amplitude(signal_frequency, time.time())*amplitude
+                sg.wait_for_sampling_period(sampling_frequency)
+                dac.set_voltage(voltage)
 
-        signal = sg.get_sin_wave_amplitude(
-            signal_frequency,
-            current_time
-        )
-
-        voltage = signal * amplitude
-
-        dac.set_voltage(voltage)
-
-        sg.wait_for_sampling_period(sampling_frequency)
+            except ValueError:
+                print("Выход за границы диапозона")
 
 finally:
     dac.deinit()
