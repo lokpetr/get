@@ -11,268 +11,211 @@ GPIO.setup(photo,GPIO.IN)
 
 while True:
     GPIO.output(led, not GPIO.input(photo))   
-import numpy as np
-import time
-
-
-def get_sin_wave_amplitude(freq, time):
-    return (np.sin(2 * np.pi * freq * time) + 1) / 2
-
-
-def wait_for_sampling_period(sampling_frequency):
-    time.sleep(1 / sampling_frequency)
-import r2r_dac as r2r
-import signal_generator as sg
-import time
-
-
-amplitude = 3.2
-signal_frequency = 10
-sampling_frequency = 1000
-
-
-try:
-    dac = r2r.R2R_DAC(
-        [16, 20, 21, 25, 26, 17, 27, 22],
-        3.183,
-        True
-    )
-
-    start_time = time.time()
-
-    while True:
-        current_time = time.time() - start_time
-
-        signal = sg.get_sin_wave_amplitude(
-            signal_frequency,
-            current_time
-        )
-
-        voltage = signal * amplitude
-
-        dac.set_voltage(voltage)
-
-        sg.wait_for_sampling_period(sampling_frequency)
-
-finally:
-    dac.deinit()
 import RPi.GPIO as GPIO
 
-
 class R2R_DAC:
-    def __init__(self, gpio_bits, dynamic_range, verbose=False):
-        self.gpio_bits = gpio_bits
+    def __init__(self, pins, dynamic_range, verbose = False):
+        self.pins = pins
         self.dynamic_range = dynamic_range
         self.verbose = verbose
-
+        
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_bits, GPIO.OUT, initial=0)
+        GPIO.setup(self.pins, GPIO.OUT, initial = 0)
 
     def deinit(self):
-        GPIO.output(self.gpio_bits, 0)
+        GPIO.output(self.pins, 0)
         GPIO.cleanup()
 
     def set_number(self, number):
-        if not (0 <= number <= 255):
-            print("Число должно быть от 0 до 255")
-            return
+        if number>2**len(self.pins)-1:
+            print("Число вышло за допустимый диапозон")
+            return 0
 
-        for i in range(8):
-            bit = (number >> i) & 1
-            GPIO.output(self.gpio_bits[i], bit)
+        for pin in self.pins:
+            GPIO.output(pin, 0)
+        
+        bin_num = ''
+        while number != 0:
+            bin_num=str(number%2)+bin_num
+            number = number//2
 
-        if self.verbose:
-            print(f"Установлено число: {number}")
+        for i in range(len(bin_num)):
+            GPIO.output(self.pins[8-len(bin_num)+i], int(bin_num[i]))
+        
+        return 0
 
     def set_voltage(self, voltage):
         if not (0.0 <= voltage <= self.dynamic_range):
-            print(
-                f"Напряжение выходит за динамический диапазон "
-                f"ЦАП (0.00 - {self.dynamic_range:.2f} В)"
-            )
-            self.set_number(0)
-            return
+            print(f"Напряжение выходит за динамический диапозон ЦАП (0.00 - {dynamic_range:.2f} В")
+            print("Устанавливаем 0.0 В")
+            return 0
+    
+        number = int(voltage/self.dynamic_range * 255)
 
-        number = int(voltage / self.dynamic_range * 255)
+        if number>2**len(self.pins)-1:
+            print("Число вышло за допустимый диапозон")
+            return 0
 
-        if self.verbose:
-            print(f"Напряжение: {voltage:.2f} В")
-            print(f"Число: {number}")
+        '''
+        for pin in self.pins:
+            GPIO.output(pin, 0)
+        
+        '''
+        bin_num = ''
+        while number != 0:
+            bin_num=str(number%2)+bin_num
+            number = number//2
 
-        self.set_number(number)
+        if len(bin_num)<8:
+            bin_num = '0'*(8-len(bin_num))+bin_num
 
+        for i in range(len(bin_num)):
+            GPIO.output(self.pins[8-len(bin_num)+i], int(bin_num[i]))
+        
+        return 0
+        
 
 if __name__ == "__main__":
     try:
-        dac = R2R_DAC(
-            [16, 20, 21, 25, 26, 17, 27, 22],
-            3.183,
-            True
-        )
+        dac = R2R_DAC([16, 20, 21, 25, 26, 17, 27, 22], 3.183, True)
 
         while True:
             try:
                 voltage = float(input("Введите напряжение в Вольтах: "))
                 dac.set_voltage(voltage)
-import pwm_dac as pwm
-import signal_generator as sg
-import time
 
-
-amplitude = 3.2
-signal_frequency = 10
-sampling_frequency = 1000
-
-
-try:
-    dac = pwm.PWM_DAC(
-        12,
-        500,
-        3.290,
-        True
-    )
-
-    start_time = time.time()
-
-    while True:
-        current_time = time.time() - start_time
-
-        signal = sg.get_sin_wave_amplitude(
-            signal_frequency,
-            current_time
-        )
-
-        voltage = signal * amplitude
-
-        dac.set_voltage(voltage)
-
-        sg.wait_for_sampling_period(sampling_frequency)
-
-finally:
-    dac.deinit()
-    
             except ValueError:
                 print("Вы ввели не число. Попробуйте ещё раз\n")
 
     finally:
         dac.deinit()
-import RPi.GPIO as GPIO
-import signal_generator as sg
 import time
 
+def get_triangle_amplitude(freq, tm):
+    return freq*abs(1/freq-2*(tm%(1/freq)))
 
-class R2R_DAC:
-    def __init__(self, gpio_bits, dynamic_range):
-        self.gpio_bits = gpio_bits
-        self.dynamic_range = dynamic_range
-
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_bits, GPIO.OUT, initial=0)
-
-    def set_voltage(self, voltage):
-        number = int(voltage / self.dynamic_range * 255)
-
-        for i in range(8):
-            bit = (number >> i) & 1
-            GPIO.output(self.gpio_bits[i], bit)
-
-    def deinit(self):
-        GPIO.output(self.gpio_bits, 0)
-        GPIO.cleanup()
-
+def wait_for_sampling_period(sampling_frequency):
+    time.sleep(1/sampling_frequency)
+    return None
+import r2r_dac as r2r
+import signal_generator_triangle as sg
+import time
 
 amplitude = 3.2
 signal_frequency = 10
-sampling_frequency = 1000
-
+sampling_frequency = 10000
+pins = [16, 20, 21, 25, 26, 17, 27, 22]
+dynamic_range = 3.3
 
 try:
-    dac = R2R_DAC(
-        [16, 20, 21, 25, 26, 17, 27, 22],
-        3.183
-    )
-
-    start_time = time.time()
+    dac = r2r.R2R_DAC(pins, dynamic_range)
 
     while True:
-        current_time = time.time() - start_time
+            try:
+                voltage = sg.get_triangle_amplitude(signal_frequency, time.time())*amplitude
+                sg.wait_for_sampling_period(sampling_frequency)
+                dac.set_voltage(voltage)
 
-        signal = sg.get_sin_wave_amplitude(
-            signal_frequency,
-            current_time
-        )
-
-        voltage = signal * amplitude
-
-        dac.set_voltage(voltage)
-        
-
-        sg.wait_for_sampling_period(sampling_frequency)
-
-
+            except ValueError:
+                print("Выход за границы диапозона")
 
 finally:
     dac.deinit()
-import RPi.GPIO as GPIO
+import pwm_dac as pwm
 import signal_generator as sg
 import time
 
-
-class PWM_DAC:
-    def __init__(self, gpio_pin, pwm_frequency, dynamic_range):
-        self.gpio_pin = gpio_pin
-        self.pwm_frequency = pwm_frequency
-        self.dynamic_range = dynamic_range
-
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_pin, GPIO.OUT)
-
-        self.pwm = GPIO.PWM(self.gpio_pin, self.pwm_frequency)
-        self.pwm.start(0)
-
-    def set_voltage(self, voltage):
-        duty_cycle = voltage / self.dynamic_range * 100
-
-        if duty_cycle < 0:
-            duty_cycle = 0
-
-        if duty_cycle > 100:
-            duty_cycle = 100
-
-        self.pwm.ChangeDutyCycle(duty_cycle)
-
-    def deinit(self):
-        self.pwm.stop()
-        GPIO.cleanup()
-
-
 amplitude = 3.2
+pwm_frequency = 500
 signal_frequency = 10
 sampling_frequency = 1000
-
+pin = 12
+dynamic_range = 3.3
 
 try:
-    dac = PWM_DAC(
-        12,
-        500,
-        3.290
-    )
-
-    start_time = time.time()
+    dac = pwm.PWM_DAC(pin, pwm_frequency, dynamic_range)
 
     while True:
-        current_time = time.time() - start_time
+            try:
+                voltage = sg.get_sin_wave_amplitude(signal_frequency, time.time())*amplitude
+                sg.wait_for_sampling_period(sampling_frequency)
+                dac.set_voltage(voltage)
 
-        signal = sg.get_sin_wave_amplitude(
-            signal_frequency,
-            current_time
-        )
+            except ValueError:
+                print("Выход за границы диапозона")
 
-        voltage = signal * amplitude
+finally:
+    dac.deinit()
+import smbus
 
-        dac.set_voltage(voltage)
+class MCP4725:
+    def __init__(self, dynamic_range, address=0x61, verbose = True):
+        self.bus = smbus.SMBus(1)
 
-        sg.wait_for_sampling_period(sampling_frequency)
+        self.address = address
+        self.wm = 0x00
+        self.pds = 0x00
+
+        self.verbose = verbose
+        self.dynamic_range = dynamic_range
+
+    def deinit(self):
+        self.bus.close()
+
+
+    def set_number(self, number):
+        if not isinstance(number, int):
+            print("На вход ЦАП можно подавать только целые числа")
+
+        if not (0 <= number <= 4095):
+            print("Число выходит за разрядность MCP4752 (12 бит)")
+
+        first_byte = self.wm | self.pds | number >> 8
+        second_byte = number & 0xFF
+        self.bus.write_byte_data(0x61, first_byte, second_byte)
+
+        if self.verbose:
+            print(f"Число: {number}, отправленное по I2C данные: [0x{(self.address << 1):02X}, 0x{first_byte:02X}, 0x{second_byte:02X}]\n")
+
+    def set_voltage(self, voltage):
+        number = int(voltage/self.dynamic_range*4095)
+        self.set_number(number)
+
+if __name__ == "__main__":
+        try:
+            mcp = MCP4725(5.00)
+
+            while True:
+                try:
+                    voltage = float(input("Введите напряжение в Вольтах: "))
+                    mcp.set_voltage(voltage)
+
+                except ValueError:
+                    print("Вы ввели не число. Попробуйте ещё раз\n")
+
+        finally:
+            mcp.deinit()
+import mcp4725_driver as mcp4725
+import signal_generator as sg
+import time
+
+amplitude = 2
+signal_frequency = 10
+sampling_frequency = 1000
+pins = [16, 20, 21, 25, 26, 17, 27, 22]
+dynamic_range = 3.3
+
+try:
+    dac = mcp4725.MCP4725(dynamic_range)
+
+    while True:
+            try:
+                voltage = sg.get_sin_wave_amplitude(signal_frequency, time.time())*amplitude
+                sg.wait_for_sampling_period(sampling_frequency)
+                dac.set_voltage(voltage)
+
+            except ValueError:
+                print("Выход за границы диапозона")
 
 finally:
     dac.deinit()
